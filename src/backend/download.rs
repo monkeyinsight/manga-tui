@@ -74,7 +74,7 @@ impl<'a> DownloadChapter {
     }
 
     fn make_chapter_file_name(&'a self) -> String {
-        let file_name = format!("Ch. {} {} {} {}", self.number, self.chapter_title, self.scanlator, self.id_chapter);
+        let file_name = format!("Ch. {:0>3} {} {} {}", self.number, self.chapter_title, self.scanlator, self.id_chapter);
         file_name
     }
 
