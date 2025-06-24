@@ -1,24 +1,36 @@
+#![allow(unused)]
 #![allow(dead_code)]
 #![allow(deprecated)]
+#![allow(clippy::single_match)]
 
 use std::io::stdout;
 use std::process::exit;
+use std::sync::Arc;
 use std::time::Duration;
 
-use backend::release_notifier::{ReleaseNotifier, GITHUB_URL};
-use backend::secrets::anilist::AnilistStorage;
+use backend::cache::Cacher;
+use backend::cache::in_memory::InMemoryCache;
+use backend::manga_provider::MangaProviders;
+use backend::manga_provider::mangadex::filter::MangadexFilterProvider;
+use backend::manga_provider::mangadex::filter_widget::MangadexFilterWidget;
+use backend::manga_provider::mangadex::{API_URL_BASE, COVER_IMG_URL_BASE, MangadexClient};
+use backend::manga_provider::weebcentral::filter_state::{WeebcentralFilterState, WeebcentralFiltersProvider};
+use backend::manga_provider::weebcentral::filter_widget::WeebcentralFilterWidget;
+use backend::manga_provider::weebcentral::{WEEBCENTRAL_BASE_URL, WeebcentralProvider};
+use backend::release_notifier::{GITHUB_URL, ReleaseNotifier};
+use backend::secrets::keyring::KeyringStorage;
 use backend::tracker::anilist::{Anilist, BASE_ANILIST_API_URL};
 use clap::Parser;
-use crossterm::event::{DisableMouseCapture, EnableMouseCapture};
+use cli::{Credentials, check_anilist_credentials_are_stored};
 use crossterm::ExecutableCommand;
+use crossterm::event::{DisableMouseCapture, EnableMouseCapture};
 use http::StatusCode;
 use log::LevelFilter;
 use logger::{ILogger, Logger};
 
 use self::backend::build_data_dir;
 use self::backend::database::Database;
-use self::backend::fetch::{MangadexClient, API_URL_BASE, COVER_IMG_URL_BASE, MANGADEX_CLIENT_INSTANCE};
-use self::backend::migration::migrate_version;
+use self::backend::migration::update_database_with_migrations;
 use self::backend::tui::run_app;
 use self::cli::CliArgs;
 use self::config::MangaTuiConfig;
@@ -35,20 +47,11 @@ mod view;
 #[tokio::main(flavor = "multi_thread", worker_threads = 7)]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let logger = Logger;
+
     pretty_env_logger::formatted_builder()
         .format_module_path(false)
         .filter_level(LevelFilter::Info)
         .init();
-
-    let cli_args = CliArgs::parse();
-
-    cli_args.proccess_args().await?;
-
-    let notifier = ReleaseNotifier::new(GITHUB_URL.parse().unwrap());
-
-    if let Err(e) = notifier.check_new_releases(&logger).await {
-        logger.error(e);
-    }
 
     match build_data_dir(&logger) {
         Ok(_) => {},
@@ -65,58 +68,103 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         },
     }
 
-    let anilist_storage = AnilistStorage::new();
+    let cli_args = CliArgs::parse();
 
-    let anilist_client = match anilist_storage.check_credentials_stored() {
-        Ok(Some(credentials)) => {
-            logger.inform("Anilist is setup, tracking reading history");
-            tokio::time::sleep(Duration::from_secs(1)).await;
-            Some(
-                Anilist::new(BASE_ANILIST_API_URL.parse().unwrap())
-                    .with_token(credentials.access_token)
-                    .with_client_id(credentials.client_id),
-            )
-        },
-        Err(e) => {
-            logger.warn(format!("There is an issue when trying to check for anilist, more details about the error : {e}"));
-            None
-        },
-        _ => None,
-    };
+    let manga_provider_cli = cli_args.manga_provider;
 
-    let mangadex_client = MangadexClient::new(API_URL_BASE.parse().unwrap(), COVER_IMG_URL_BASE.parse().unwrap())
-        .with_image_quality(MangaTuiConfig::get().image_quality);
+    cli_args.proccess_args().await?;
 
-    logger.inform("Checking mangadex status...");
+    let config = MangaTuiConfig::get();
 
-    let mangadex_status = mangadex_client.check_status().await;
+    if config.check_new_updates {
+        let notifier = ReleaseNotifier::new(GITHUB_URL.parse().unwrap());
 
-    match mangadex_status {
-        Ok(response) => {
-            if response.status() != StatusCode::OK {
-                logger.warn("Mangadex appears to be in maintenance, please come back later");
-                exit(0)
-            }
-        },
-        Err(e) => {
-            logger.error(format!("Some error ocurred, more details : {e}").into());
-            exit(1)
-        },
+        if let Err(e) = notifier.check_new_releases(&logger).await {
+            logger.error(e);
+        }
     }
 
-    MANGADEX_CLIENT_INSTANCE.set(mangadex_client).unwrap();
+    let anilist_storage = KeyringStorage::new();
+
+    let init_anilist = |credentials: Credentials| {
+        Anilist::new(BASE_ANILIST_API_URL.parse().unwrap())
+            .with_token(credentials.access_token)
+            .with_client_id(credentials.client_id)
+    };
+
+    let anilist_client = match config.check_anilist_credentials() {
+        Some(credentials) => Some(init_anilist(credentials)),
+        None => check_anilist_credentials_are_stored(anilist_storage)
+            .inspect_err(|e| {
+                logger.warn(format!(
+                    "There is an issue when trying to check anilist credentials, more details about the error : {e}"
+                ));
+            })
+            .ok()
+            .flatten()
+            .map(init_anilist),
+    }
+    .filter(|_| config.track_reading_history);
+
+    if anilist_client.is_some() {
+        logger.inform("Anilist is setup, tracking reading history");
+        tokio::time::sleep(Duration::from_secs(1)).await;
+    }
 
     let mut connection = Database::get_connection()?;
     let database = Database::new(&connection);
 
     database.setup()?;
-    migrate_version(&mut connection, &logger)?;
+    update_database_with_migrations(&mut connection, &logger)?;
 
     drop(connection);
 
     color_eyre::install()?;
     stdout().execute(EnableMouseCapture)?;
-    run_app(ratatui::init(), MangadexClient::global().clone(), anilist_client).await?;
+
+    let cache_provider: Arc<dyn Cacher> = InMemoryCache::init(8);
+
+    let provider = if let Some(pro) = manga_provider_cli { pro } else { config.default_manga_provider };
+
+    match provider {
+        MangaProviders::Mangadex => {
+            let mangadex_client =
+                MangadexClient::new(API_URL_BASE.parse().unwrap(), COVER_IMG_URL_BASE.parse().unwrap(), cache_provider)
+                    .with_image_quality(config.image_quality);
+
+            logger.inform("Checking mangadex status...");
+
+            let mangadex_status = mangadex_client.check_status().await;
+
+            match mangadex_status {
+                Ok(response) => {
+                    if response.status() != StatusCode::OK {
+                        logger.warn("Mangadex appears to be in maintenance, please come back later");
+                        exit(0)
+                    }
+                },
+                Err(e) => {
+                    logger.error(format!("Some error ocurred, more details : {e}").into());
+                    exit(1)
+                },
+            }
+
+            run_app(ratatui::init(), mangadex_client, anilist_client, MangadexFilterProvider::new(), MangadexFilterWidget::new())
+                .await?;
+        },
+        MangaProviders::Weebcentral => {
+            logger.inform("Using Weeb central as manga provider");
+            tokio::time::sleep(Duration::from_secs(1)).await;
+            run_app(
+                ratatui::init(),
+                WeebcentralProvider::new(WEEBCENTRAL_BASE_URL.parse().unwrap(), cache_provider),
+                anilist_client,
+                WeebcentralFiltersProvider::new(WeebcentralFilterState::default()),
+                WeebcentralFilterWidget {},
+            )
+            .await?;
+        },
+    }
     ratatui::restore();
     stdout().execute(DisableMouseCapture)?;
 

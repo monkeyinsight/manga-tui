@@ -15,7 +15,7 @@ use serde_json::json;
 
 use crate::backend::tracker::{MangaToTrack, MangaTracker, MarkAsRead};
 use crate::cli::AnilistTokenChecker;
-use crate::global::USER_AGENT;
+use crate::global::APP_USER_AGENT;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct GetMangaByTitleQuery<'a> {
@@ -249,7 +249,7 @@ impl Anilist {
         let client = Client::builder()
             .default_headers(default_headers)
             .timeout(Duration::from_secs(10))
-            .user_agent(&*USER_AGENT)
+            .user_agent(&*APP_USER_AGENT)
             .build()
             .unwrap();
 
@@ -329,7 +329,7 @@ impl MangaTracker for Anilist {
 
         if response.status() != StatusCode::OK {
             return Err(
-                format!("could not sync reading status with anilist, more details of the response : \n {:#?}  ", response).into()
+                format!("could not sync reading status with anilist, more details of the response : \n {response:#?}  ").into()
             );
         }
 
@@ -349,8 +349,7 @@ impl MangaTracker for Anilist {
 
         if response.status() != StatusCode::OK {
             return Err(format!(
-                "could not mark manga as plan to read in anilist, more details of the response : \n {:#?}  ",
-                response
+                "could not mark manga as plan to read in anilist, more details of the response : \n {response:#?}  "
             )
             .into());
         }
@@ -646,7 +645,7 @@ mod tests {
             .await;
 
         anilist
-            .mark_manga_as_plan_to_read(PlanToReadArgs { id: &manga_id })
+            .mark_manga_as_plan_to_read(PlanToReadArgs { id: manga_id })
             .await
             .expect("should not error");
 

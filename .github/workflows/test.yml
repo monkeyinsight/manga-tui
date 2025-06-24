@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+    branches: [main, develop, dev, "release/**", "hotfix/**"]
 
 env:
   CARGO_TERM_COLOR: always
@@ -16,11 +16,11 @@ jobs:
     name: Check code formatting and linting
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: Swatinem/rust-cache@v2
 
       - name: setup toolchain
-        uses: hecrj/setup-rust-action@v1
+        uses: hecrj/setup-rust-action@v2
         with:
           rust-version: ${{ env.RUST_TOOLCHAIN_VERSION }}
 
@@ -43,12 +43,12 @@ jobs:
     name: Build and test manga tui
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - uses: Swatinem/rust-cache@v2
 
       - name: setup toolchain
-        uses: hecrj/setup-rust-action@v1
+        uses: hecrj/setup-rust-action@v2
         with:
           rust-version: ${{ env.RUST_TOOLCHAIN_VERSION }}
 
@@ -62,10 +62,10 @@ jobs:
       - name: build
         run: cargo build --release --verbose
 
-      - name: install cargo nextest
-        run: cargo install cargo-nextest@0.9.82
+      - name: Install latest nextest release
+        uses: taiki-e/install-action@nextest
 
-      - name: test
+      - name: Run tests
         run: cargo nextest run --no-fail-fast
 
       - name: run ignored tests
@@ -80,17 +80,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Check Nix flake inputs
-        uses: DeterminateSystems/flake-checker-action@v4
+        uses: DeterminateSystems/flake-checker-action@v9
       - name: Install Nix
-        uses: DeterminateSystems/nix-installer-action@v3
-      - name: Activate Magic Nix Cache
-        uses: DeterminateSystems/magic-nix-cache-action@main
-        with:
-          use-flakehub: false
-
-      - name: install_dependencies
-        run: sudo apt install libdbus-1-dev pkg-config
-
+        uses: DeterminateSystems/nix-installer-action@v16
+      # according to the repository https://github.com/DeterminateSystems/magic-nix-cache
+      # The Magic Nix Cache will will stop working on February 1st , 2025 (https://determinate.systems/posts/magic-nix-cache-free-tier-eol/) unless you're on GitHub Enterprise Server.
+      # - name: Activate Magic Nix Cache
+      #   uses: DeterminateSystems/magic-nix-cache-action@main
+      #   with:
+      #     use-flakehub: false
 
       - name: Build default package
-        run: nix build
+        run: nix build --print-build-logs --verbose

@@ -22,65 +22,68 @@
 
 <p align="center">
 
-https://github.com/user-attachments/assets/2b693bd3-ec30-4d6e-bcc4-6cf457a860b1
+<https://github.com/user-attachments/assets/2b693bd3-ec30-4d6e-bcc4-6cf457a860b1>
 
 </p>
-
 
 ## Table of contents
 
 - [Features](#features)
-- [Dependencies](#Dependencies)
+- [Dependencies](#dependencies)
 - [Installation](#installation)
 - [Image rendering](#image-rendering)
 - [Usage](#usage)
+- [Manga providers](#manga-providers)
 - [Configuration](#configuration)
 - [Motivation](#motivation)
 - [Credits](#credits)
 
 ## Features
 
+- [Mangadex](https://mangadex.org/) and [Weebcentral](https://weebcentral.com/) are available as manga providers
+
+- Track your reading history with [anilist integration](./docs/anilist.md)
 
 - Advanced search (with filters)
 
-https://github.com/user-attachments/assets/c1e21aa1-8a51-4c47-baea-9f56dcd0d6a4
+<https://github.com/user-attachments/assets/c1e21aa1-8a51-4c47-baea-9f56dcd0d6a4>
 
-- Read manga in your terminal with terminals such as: Wezterm, iTerm2, Kitty, Ghostty 
+- Read manga in your terminal with terminals such as: Wezterm, iTerm2, Kitty, Ghostty
   
-https://github.com/user-attachments/assets/70f321ff-13d1-4c4b-9c37-604271456ab2
+<https://github.com/user-attachments/assets/70f321ff-13d1-4c4b-9c37-604271456ab2>
 
 - Reading history is stored locally (with no login required)
 
- https://github.com/user-attachments/assets/47e88e89-f73c-4575-9645-2abb80ca7d63
+ <https://github.com/user-attachments/assets/47e88e89-f73c-4575-9645-2abb80ca7d63>
 
-- Download manga (available formats: cbz, epub and raw images) 
+- Download manga (available formats: cbz, epub, pdf and raw images)
 
-https://github.com/user-attachments/assets/ba785668-7cf1-4367-93f9-6e6e1f72c12c
+<https://github.com/user-attachments/assets/ba785668-7cf1-4367-93f9-6e6e1f72c12c>
 
-- Download all chapters of a manga (available formats: cbz, epub and raw images) 
+- Download all chapters of a manga (available formats: cbz, epub, pdf and raw images)
 
-https://github.com/user-attachments/assets/26ad493f-633c-41fc-9d09-49b316118923
+<https://github.com/user-attachments/assets/26ad493f-633c-41fc-9d09-49b316118923>
 
-- Track your reading history with [anilist integration](./docs/anilist.md) 
+### Join the [discord](https://discord.gg/jNzuDCH3) server for further help, feature requests or to chat with contributors
 
-
-### Join the [discord](https://discord.gg/jNzuDCH3) server for further help, feature requests or to chat with contributors   
-
-## Dependencies 
+## Dependencies
 
 On linux you may need to install the D-bus secret service library
 
-### Debian 
+### Debian
+
 ```shell
 sudo apt install libdbus-1-dev pkg-config
 ```
 
 ### Fedora
+
 ```shell
 sudo dnf install dbus-devel pkgconf-pkg-config
 ```
 
-### Arch 
+### Arch
+
 ```shell
 sudo pacman -S dbus pkgconf
 ```
@@ -139,12 +142,95 @@ After installation just run the binary
 manga-tui
 ```
 
+## Manga providers
+
+> [!WARNING]
+> Expect any manga provider to fail at some point, either due to them closing operations due to a [lawsuit](https://www.japantimes.co.jp/news/2024/04/18/japan/crime-legal/manga-mura-copyright-ruling/) or the provider itself having issues on their end like [manganato](https://github.com/josueBarretogit/manga-tui/issues/132)
+
+By default when you run `manga-tui` Mangadex will be used
+
+```shell
+manga-tui
+```
+
+If you want to use Weebcentral or any other provider available then run:
+
+```shell
+manga-tui -p weebcentral
+```
 
 ## Configuration
 
+The config file is located at `XDG_CONFIG_HOME/manga-tui/config.toml`, to know where it is you can run:
 
-Manga downloads and reading history is stored in the `manga-tui` directory, to know where it is run: 
+```shell
+manga-tui --config-dir 
 
+# or
+
+manga-tui -c
+```
+
+Which provides the following configuration:
+
+```toml
+# The format of the manga downloaded
+# values: cbz, raw, epub, pdf
+# default: "cbz"
+download_type = "cbz"
+
+# Download image quality, low quality means images are compressed and is recommended for slow internet connections
+# values: low, high 
+# default: "low"
+image_quality = "low"
+
+# Pages around the currently selected page to try to prefetch
+# values: 0-255
+# default: 5
+amount_pages = 5
+
+# Whether or not bookmarking is done automatically, if false you decide which chapter to bookmark
+# values: true, false
+# default: true
+auto_bookmark = true
+
+# Whether or not downloading a manga counts as reading it on services like anilist
+# values: true, false
+# default: false
+track_reading_when_download = false
+
+# Enable / disable checking for new updates
+# values: true, false
+# default: true
+check_new_updates = true
+
+# Sets which manga provider will be used when running manga-tui, 
+# you can override it by running manga-tui with the -p flag like this: manga-tui -p weebcentral
+# values: mangadex, weebcentral
+# default: "mangadex"
+default_manga_provider = "mangadex"
+
+# Enable / disable tracking reading history with services like `anilist`
+# values: true, false
+# default: true
+track_reading_history = true
+
+# Anilist-related config, if you want `manga-tui` to read your anilist credentials from this file then place them here
+[anilist]
+# Your client id from your anilist account
+# leave it as an empty string "" if you don't want to use the config file to read your anilist credentials
+# values: string
+# default: ""
+client_id = ""
+
+# Your acces token from your anilist account
+# leave it as an empty string "" if you don't want to use the config file to read your anilist credentials
+# values: string
+# default: ""
+access_token = ""
+```
+
+Manga downloads and reading history is stored in the `manga-tui` directory, to know where it is run:
 
 ```shell
 manga-tui --data-dir 
@@ -156,39 +242,11 @@ manga-tui -d
 
 On linux it will output something like: `~/.local/share/manga-tui` <br />
 
-On the `manga-tui` directory there will be 4 directories
+On the `manga-tui` directory there will be 3 directories
+
 - `history`, which contains a sqlite database to store reading history
-- `config`, which contains the `manga-tui-config.toml` config file with the following fields:
-
-```toml
-# The format of the manga downloaded 
-# values : cbz , raw, epub 
-# default : cbz 
-download_type = "cbz"
-
-# Download image quality, low quality means images are compressed and is recommended for slow internet connections 
-# values : low, high 
-# default : low 
-image_quality = "low"
-
-# Pages around the currently selected page to try to prefetch
-# values : 0-255
-# default : 5
-amount_pages = 5
-
-# Whether or not bookmarking is done automatically, if false you decide which chapter to bookmark
-# values : true, false
-# default : true
-auto_bookmark = true
-
-# Whether or not downloading a manga counts as reading it on services like anilist
-# values : true, false
-# default : false
-track_reading_when_download = false
-```
-
-- `mangaDownloads`, where manga will be downloaded 
-- `errorLogs`, for storing posible errors / bugs 
+- `mangaDownloads`, where manga will be downloaded
+- `errorLogs`, for storing posible errors / bugs
 
 If you want to change the location of this directory you can set the environment variable `MANGA_TUI_DATA_DIR` to some path pointing to a directory, like: <br />
 
@@ -196,23 +254,26 @@ If you want to change the location of this directory you can set the environment
 export MANGA_TUI_DATA_DIR="/home/user/Desktop/mangas"
 ```
 
+> [!NOTE]
+> Mangadex-only feature
 By default `manga-tui` will search mangas in english, you can change the language by running:
-
 
 ```shell
 # `es` corresponds to the Iso code for spanish
 manga-tui lang --set 'es'
 ```
 
+> [!NOTE]
+> Mangadex-only feature
 Check the available languages and their Iso codes by running:
-
 
 ```shell
 manga-tui lang --print
 ```
 
 ## Motivation
-I wanted to make a "How linux user does ..." but for manga, [here is the video](https://www.youtube.com/watch?v=K0FsGRqEc1c) also this is a great excuse to start reading manga again 
+
+I wanted to make a "How linux user does ..." but for manga, [here is the video](https://www.youtube.com/watch?v=K0FsGRqEc1c) also this is a great excuse to start reading manga again
 
 ## Credits
 
