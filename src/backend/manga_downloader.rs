@@ -43,14 +43,7 @@ pub trait MangaDownloader {
     }
 
     fn make_chapter_name(&self, chapter: &ChapterToDownloadSanitized) -> PathBuf {
-        PathBuf::from(format!(
-            "Ch {} Vol {} {} {} {}",
-            chapter.chapter_number,
-            chapter.volume_number.as_ref().cloned().unwrap_or("none".to_string()),
-            chapter.chapter_title,
-            chapter.scanlator,
-            chapter.chapter_id
-        ))
+        PathBuf::from(format!("Ch {:0>3} Vol {} {}", chapter.chapter_id, chapter.chapter_title, chapter.scanlator))
     }
 
     fn save_chapter_in_file_system(&self, base_directory: &Path, chapter: ChapterToDownloadSanitized)
